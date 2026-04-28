@@ -2,7 +2,7 @@ import { useState } from "react";
 import supabase from "../supabase-client";
 
 const Auth = () => {
-  const [isSignUp, setIsSignUp] = useState(true);
+  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 

@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import supabase from "../supabase-client";
 
-const TodoListItems = () => {
+const TodoListItems = ({ session }) => {
+  // TodoList Management Part
   const [todoList, setTodoList] = useState([]);
   const [newTodo, setNewTodo] = useState("");
 
@@ -9,6 +10,7 @@ const TodoListItems = () => {
     const newTodoData = {
       name: newTodo,
       isCompleted: false,
+      user_id: session.user.id,
     };
 
     const { data, error } = await supabase
@@ -22,7 +24,6 @@ const TodoListItems = () => {
       return;
     }
 
-    setTodoList((prev) => [...prev, data]);
     setNewTodo("");
   };
 
@@ -73,6 +74,56 @@ const TodoListItems = () => {
 
   useEffect(() => {
     fetchTodo();
+  }, []);
+
+  // Session Subscription Part => REAL TIME
+  useEffect(() => {
+    const channel = supabase.channel("tasks-table");
+
+    channel
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "TodoList" },
+        (payload) => {
+          // 2. Handle INSERT (New Task)
+          if (payload.eventType === "INSERT") {
+            const newTask = payload.new;
+            setTodoList((prev) => {
+              // Prevent duplication if the user who added it already has it on screen
+              const taskExists = prev.some((todo) => todo.id === newTask.id);
+              return taskExists ? prev : [...prev, newTask];
+            });
+          }
+
+          // 3. Handle UPDATE (Toggle Completed)
+          if (payload.eventType === "UPDATE") {
+            const updatedTask = payload.new;
+            setTodoList((prev) =>
+              // Loop through and replace the old task with the updated one
+              prev.map((todo) =>
+                todo.id === updatedTask.id ? updatedTask : todo,
+              ),
+            );
+          }
+
+          // 4. Handle DELETE (Remove Task)
+          if (payload.eventType === "DELETE") {
+            // NOTE: For deletes, Supabase sends the data in payload.old, not payload.new!
+            const deletedTaskId = payload.old.id;
+            setTodoList((prev) =>
+              // Filter out the task that matches the deleted ID
+              prev.filter((todo) => todo.id !== deletedTaskId),
+            );
+          }
+        },
+      )
+      .subscribe((status) => {
+        console.log("Subscription: ", status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   return (
