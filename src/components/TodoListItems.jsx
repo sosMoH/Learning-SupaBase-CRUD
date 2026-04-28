@@ -7,10 +7,17 @@ const TodoListItems = ({ session }) => {
   const [newTodo, setNewTodo] = useState("");
 
   const addTodo = async () => {
+    let imageUrl = null;
+
+    if(taskImage){
+      imageUrl = await uploadImage(taskImage);
+    }
+
     const newTodoData = {
       name: newTodo,
       isCompleted: false,
       user_id: session.user.id,
+      image_url: imageUrl,
     };
 
     const { data, error } = await supabase
@@ -126,6 +133,27 @@ const TodoListItems = ({ session }) => {
     };
   }, []);
 
+  // Storage BUCKETS Part
+
+  const [taskImage, setTaskImage] = useState(null)
+
+  const handleFileChange = (e) => {
+    if(e.target.files && e.target.files.length > 0){
+      setTaskImage(e.target.files[0])
+    }
+  }
+
+  const uploadImage = async (file) => {
+    const filePath = `${file.name}-${Date.now()}`
+
+    const {error} = await supabase.storage.from("TaskImage").upload(filePath, file);
+    if(error) {console.error("Error Uploading Image: ", error.message); return;}
+    
+    const {data} = await supabase.storage.from("TaskImage").getPublicUrl(filePath);
+
+    return data.publicUrl;
+  }
+
   return (
     <div>
       <h1>ToDo List</h1>
@@ -136,12 +164,16 @@ const TodoListItems = ({ session }) => {
           value={newTodo}
           onChange={(e) => setNewTodo(e.target.value)}
         />
+        <br />
+        <input type="file" accept="image/*" onChange={handleFileChange} />
         <button onClick={addTodo}>Add ToDo Item</button>
       </div>
       <ul>
         {todoList.map((todo) => (
           <li key={todo.id}>
             <p>{todo.name}</p>
+            <img src={todo.image_url} style={{width:"200px"}} />
+            <br />
             <button onClick={() => toggleCompleted(todo.id, todo.isCompleted)}>
               {todo.isCompleted ? "Undo" : "Done"}
             </button>
